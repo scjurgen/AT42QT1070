@@ -37,13 +37,18 @@ uint8_t AT42QT1070::isCalibrating()
 }
 
 
+uint8_t AT42QT1070::setActiveAddress(uint8_t adr)
+{
+	Wire.beginTransmission(AT42I2CAdr);
+	Wire.write(adr);
+	return checkResult(Wire.endTransmission());
+}
+
 uint16_t AT42QT1070::readKeyValues(uint8_t key)
 {
 	uint16_t retval=0;
-
-	Wire.beginTransmission(AT42I2CAdr);
-	Wire.write(KEYSIGNAL+key*2);
-	checkResult(Wire.endTransmission());
+	if (!setActiveAddress(KEYSIGNAL+key*2))
+		return 0;
 	Wire.requestFrom(AT42I2CAdr, (uint8_t)2);
 	if(Wire.available()==2)
 	{
@@ -59,10 +64,9 @@ uint16_t AT42QT1070::readKeyValues(uint8_t key)
 uint8_t AT42QT1070::getRegValue(uint8_t adr)
 {
 	uint8_t val=0;
-	Wire.beginTransmission(AT42I2CAdr);
-	Wire.write(adr);
-	uint8_t result = Wire.endTransmission();
-	checkResult(result);
+	if (!setActiveAddress(adr))
+		return 0;
+
 	Wire.requestFrom(AT42I2CAdr, (uint8_t)1);
 	if (Wire.available()==1)
 	{
@@ -82,6 +86,9 @@ void AT42QT1070::setRegValuePreserved(uint8_t regAdr, uint8_t val, uint8_t maskP
     //int result = Wire.endTransmission();
     //checkResult(result);
 }
+
+
+
 void AT42QT1070::setRegValue(uint8_t regAdr, uint8_t val)
 {
     Wire.beginTransmission(AT42I2CAdr);

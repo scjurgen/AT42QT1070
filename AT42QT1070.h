@@ -49,6 +49,12 @@ public: // some public definitions first
 		CALIBRATE=56, // write non zero for calibration, check status register
 		RESET=57, // write non zero for reset
 	} QT1070ADR;
+	typedef enum
+	{
+		TOUCHBIT=0x01,
+		OVERFLOWBIT=0x40,
+		CALIBRATEBIT=0x80
+	} QT1070DETSTATUSBITS;
 
 	typedef void (*ErrorCallback)(const uint8_t);
 
@@ -79,7 +85,7 @@ public:
     void readKeySet();
 
     void setRegValue(uint8_t regAdr, uint8_t val);
-    void setRegValuePreserved(uint8_t regAdr, uint8_t val, uint8_t maskPreserve);
+    void setRegValuePreserved(uint8_t regAdr, uint8_t val, uint8_t maskPreserve); //!<preserve the masked out values in the R/W register
     uint8_t getRegValue(uint8_t adr);
     void lowPowerMode(uint8_t val);
     void maxOnDuration(uint8_t val);
@@ -91,7 +97,7 @@ public:
     could be off.
     To understand that a calibration has been done you need to read the DETECTIONSTATUS registry or use the wrapper isCalibrating()
     */
-#if POLLINGUSED
+#if POLLING_USED
     uint16_t refSet[AT42QT1070_MAXKEYS]; //!< internal copy of ref set only used if using POLLING mode
     void completeDiffSet(int8_t *delta); //!< get difference of keyvalues delta[i]=actual[i]-reference[i]
     void changedDiffSet(int8_t *delta); //!< as completeDiffSet but suppose that reference did not change so it is not loaded
