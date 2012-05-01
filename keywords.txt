@@ -1,0 +1,29 @@
+#######################################
+# Syntax Coloring Map for BMA180
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+AT42QT1070	KEYWORD1
+
+
+#######################################
+# Methods and Functions ( KEYWORD2)
+#######################################
+
+CHIPID	KEYWORD2
+FIRMWARE	KEYWORD2
+DETECTIONSTATUS	KEYWORD2
+KEYSTATUS	KEYWORD2
+KEYSIGNAL	KEYWORD2
+REFERENCE	KEYWORD2
+NEGTHRESHOLD	KEYWORD2
+AVERAGE	KEYWORD2
+DETECTIONINTEGRATORCOUNTER	KEYWORD2
+FOMODI	KEYWORD2
+LOWPOWERMODE	KEYWORD2
+MAXONDURATION	KEYWORD2
+CALIBRATE	KEYWORD2
+RESET	KEYWORD2
