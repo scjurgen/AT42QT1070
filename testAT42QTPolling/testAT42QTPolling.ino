@@ -4,27 +4,9 @@
 * Author : Jurgen Schwietering
 * Date : 2012-04-30
 * Version : 0.0
-* /brief : Library for use with AT42QT10x0 Q-touch i2c
-* Clock pin 6 of SOIC-14pin package to SCL (analog 5 on arduino uno)
-* Data pin 3 of SOIC-14pin package to SDA (analog 4 on arduino uno)
-* other pins: (QT1070)
-*  1=Vdd
-*  2=Mode (should be GND for interfacing with micro)
-*  3=SDA
-*  4=RESET (leave open)
-*  5=CHANGE (Interrupt)
-*  6=SCL
-*  7=KEY6
-*  
-*  8=Key5
-*  9=Key4
-* 10=Key3
-* 11=Key2
-* 12=Key1
-* 13=Key0
-* 14=GND (VSS)
-*
-* check datasheet for 20-pin VQFN package
+
+this test program uses polling and interrupt to read pressed keys
+
 ************************************************************************************/
 
 
@@ -36,6 +18,24 @@ const uint8_t ledPin = 13;
 
 AT42QT1070 qTouch;
 
+
+void ErrorCallback(uint8_t errNumber)
+{
+	Serial.print("An error occured in i2c:");
+	Serial.println(errNumber);
+	switch(errNumber)
+	{
+		case 1: Serial.print(F("data too long ")); break;
+		case 2: Serial.print(F("received NACK on address ")); break;
+		case 3: Serial.print(F("recevied NACK on transmit ")); break;
+		case 4:  // fll through
+		default:
+				Serial.print(F("unknown err. (chip no connecte?)")); 
+				break;
+	}
+
+}
+
 volatile uint8_t touchEvent=0;
 
 static void touchEventISR()
@@ -45,9 +45,9 @@ static void touchEventISR()
 
 void setKeyHitISR(uint8_t pin)
 {
-  pinMode(pin, INPUT);
-  digitalWrite(pin, HIGH); // pull high, CHANGE is open drain
-  attachInterrupt(pin-2,touchEventISR,FALLING); // on active falls low
+	pinMode(pin, INPUT);
+	digitalWrite(pin, HIGH); // pull high, CHANGE is open drain
+	attachInterrupt(pin-2,touchEventISR,FALLING); // on active falls low
 }
 
 
@@ -66,14 +66,20 @@ void setup()
   	printValue("ChipID=",qTouch.getRegValue(AT42QT1070::CHIPID));
 	setKeyHitISR(2);
   	qTouch.reset();
-	qTouch.maxOnDuration(0); // no stuck keys (we want full fingers)
-	qTouch.lowPowerMode(0); // full power
   	qTouch.calibrate();
   	while(qTouch.isCalibrating())
   	{
   		Serial.print(".");
   		delay(10);
   	}
+	qTouch.maxOnDuration(0); // no stuck keys (we want full fingers)
+	qTouch.lowPowerMode(0); // full power
+ 	Serial.print("max on duration:");
+  	Serial.println(qTouch.getRegValue(AT42QT1070::MAXONDURATION));
+  	Serial.print("low power mode read:");
+  	Serial.println(qTouch.getRegValue(AT42QT1070::LOWPOWERMODE));
+  	qTouch.saveReferenceSet();	
+	delay(100);
 }
 
 
@@ -96,9 +102,78 @@ void printBitSet(uint8_t v)
 	Serial.print(outb);
 }
 
+int8_t delta[AT42QT1070_MAXKEYS]; // could be negative
+
+uint8_t lastSet[AT42QT1070_MAXKEYS];
+uint8_t currentSet[AT42QT1070_MAXKEYS];
+uint16_t t3Last=0; // ternery value
+
+void ShowKeySituation()
+{
+	for (uint8_t i=0; i < AT42QT1070_MAXKEYS; i++)
+	{
+		switch (currentSet[i])
+		{
+			case 2:
+				Serial.print("X  ");
+				break;
+			case 1:
+				Serial.print("-  ");
+				break;
+			case 0:
+				Serial.print(".  ");
+				break;
+		}
+	
+	}
+	
+	for (uint8_t i=0; i < AT42QT1070_MAXKEYS; i++)
+	{
+		char outb[8];
+		sprintf(outb,"%+4d ", delta[i]);
+		Serial.print(outb);
+	
+	}
+	
+	Serial.println("");
+}
+
+uint8_t countzero=0;
+
+void CheckForForcedCalibration()
+{
+	if (t3Last==0)
+	{
+		countzero++;
+	}
+	if (countzero>100)
+	{
+		Serial.println("Calibrating");
+	 	qTouch.calibrate();
+	  	while(qTouch.isCalibrating())
+	  	{
+	  		Serial.print(".");
+	  		delay(10);
+	  	}	
+	  	countzero=0;
+  	}
+}
+
+
+uint32_t readsDone=0;
+unsigned long nextStat=0;
 
 void loop()
 {
+	readsDone++;
+	if (millis() >nextStat)
+	{
+		nextStat=millis()+10000;
+		char outb[32];
+		sprintf(outb,"%ul.%d reads per second", readsDone/10,readsDone%10);
+		Serial.println(outb);
+		readsDone=0;
+	}
 	if (touchEvent)
 	{
 		touchEvent=0;
@@ -106,97 +181,40 @@ void loop()
 		uint8_t keyset;
 		status=qTouch.getRegValue(AT42QT1070::DETECTIONSTATUS);
 		keyset=qTouch.getRegValue(AT42QT1070::KEYSTATUS);
-		printBitSet(status);
-		Serial.print(" ");	
-		printBitSet(keyset);
-		Serial.print("     ");	
-		int8_t delta[AT42QT1070_MAXKEYS];
-		qTouch.completeDiffSet(delta);
-		for (uint8_t i=0; i < AT42QT1070_MAXKEYS;i++)
+		if (status & AT42QT1070::CALIBRATEBIT)
 		{
-			Serial.print(delta[i]);
-			Serial.print(",");
+			Serial.println("Calibrating");
+			qTouch.saveReferenceSet();
 		}
-		Serial.println("");
 	}
-	/*
- 		Wire.beginTransmission(0x1B); // transmit to device
-		Wire.write(0x3); // want to read detection status // set pointer
-		int result=Wire.endTransmission(); // stop transmitting
-		switch(result)
+	qTouch.changedDiffSet(delta);
+	uint16_t t3=0;
+	uint16_t m=3;
+	for (uint8_t i=0; i < AT42QT1070_MAXKEYS; i++)
+	{
+		if (delta[i]>80)
 		{
-			case 0: break;
-			case 1: Serial.print(F("data too long ")); break;
-			case 2: Serial.print(F("received NACK on address ")); Wire.begin();break;
-			case 3: Serial.print(F("recevied NACK on transmit ")); Wire.begin();break;
-			case 4: Serial.print(F("unknown err. "));Wire.begin(); break;
-				
-		}
-		Wire.requestFrom(0x1B, 1); 
-		if(Wire.available()==1)
-		{
-			char outb[32];
-			int status = Wire.read();
-			for (int i=0; i < 8; i++)
-			{
-				if (status & (1 <<i))
-				{
-					outb[i]='-';
-				}
-				else
-				{
-					outb[i]='X';
-				}
-			}
-			outb[8]=0;
-			Serial.print(outb);
-		}
- 
-		Wire.beginTransmission(0x1B); // transmit to device
-		Wire.write(0x4); // want to read detection status // set pointer
-		result=Wire.endTransmission(); // stop transmitting
-		switch(result)
-		{
-			case 0: break;
-			case 1: Serial.print("data too long "); break;
-			case 2: Serial.print("received NACK on address "); Wire.begin();break;
-			case 3: Serial.print("recevied NACK on transmit "); Wire.begin();break;
-			case 4: Serial.print("unknown err. ");Wire.begin(); break;
-				
-		}
-		Wire.requestFrom(0x1B, 28); 
-		if(Wire.available()==28)
-      	{
-			for (int i=0; i < 14; i++)
-			{
-				char outb[32];
-			    int msb = Wire.read();
-        		int lsb = Wire.read();
-        		unsigned int val= (msb<<8)+lsb;
-        		sprintf(outb, "%4x ", val);
-        		Serial.print(outb);
-			}
-			Serial.println("");
+			currentSet[i]=2;
+			t3+=m*2;
 		}
 		else
+		if (delta[i]>40)
 		{
-			char outb[32];
-			sprintf(outb,"%d ", Wire.available());
-			Serial.print(outb);
-			Serial.println("I2C not ok!");
+			currentSet[i]=1;
+			t3+=m;
 		}
-		result=Wire.endTransmission();
-		switch(result)
-		{
-			case 0: break;
-			case 1: Serial.print("data too long "); break;
-			case 2: Serial.print("received NACK on address "); Wire.begin();break;
-			case 3: Serial.print("recevied NACK on transmit ");Wire.begin(); break;
-			case 4: Serial.print("unknown err. "); Wire.begin();break;
-				
-		}
-
-	delay(200);
-	*/
+		else
+			currentSet[i]=0;
+		m*=3;
+	}
+	if (t3!=t3Last)
+	{
+		CheckForForcedCalibration();
+		char outb[8];
+		sprintf(outb,"%5d:", t3);
+		Serial.print(outb);
+		ShowKeySituation();
+		t3Last=t3;
+	}
 }
 

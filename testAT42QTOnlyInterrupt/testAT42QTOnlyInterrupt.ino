@@ -36,18 +36,20 @@ const uint8_t ledPin = 13;
 
 AT42QT1070 qTouch;
 
-volatile uint8_t touchEvent=0;
 
-static void touchEventISR()
+void ErrorCallback(uint8_t errNumber)
 {
-	touchEvent=1;	
-}
-
-void setKeyHitISR(uint8_t pin)
-{
-  pinMode(pin, INPUT);
-  digitalWrite(pin, HIGH); // pull high, CHANGE is open drain
-  attachInterrupt(pin-2,touchEventISR,FALLING); // on active falls low
+	Serial.print("An error occured in i2c:");
+	Serial.println(errNumber);
+	switch(errNumber)
+	{
+		case 1: Serial.print(F("data too long ")); break;
+		case 2: Serial.print(F("received NACK on address ")); break;
+		case 3: Serial.print(F("recevied NACK on transmit ")); break;
+		case 4:  // fll through
+		default:
+				Serial.print(F("unknown err. (chip no connecte?)")); break;
+	}	
 }
 
 
@@ -64,21 +66,30 @@ void setup()
   	pinMode(ledPin,OUTPUT);
 
   	printValue("ChipID=",qTouch.getRegValue(AT42QT1070::CHIPID));
-	setKeyHitISR(2);
+  	qTouch.setInternalISR(2);
+  	qTouch.setErrorCallback(ErrorCallback);
+
+//	setKeyHitISR(2);
   	qTouch.reset();
-	qTouch.maxOnDuration(0); // no stuck keys (we want full fingers)
-	qTouch.lowPowerMode(4); // full power, let's save a bit if gasoline
+  
   	qTouch.calibrate();
   	while(qTouch.isCalibrating())
   	{
   		Serial.print(".");
   		delay(10);
   	}
+
+ 	qTouch.maxOnDuration(8); // maximum on duration of key (8*160ms)
+	qTouch.lowPowerMode(4); // full power, let's save a bit if gasoline
+ 	Serial.print("max on duration:");
+  	Serial.println(qTouch.getRegValue(AT42QT1070::MAXONDURATION));
+  	Serial.print("low power mode read:");
+  	Serial.println(qTouch.getRegValue(AT42QT1070::LOWPOWERMODE));
 }
 
 
-#define BLINKPERIOD 100
-static uint8_t blnkCount=0;
+#define BLINKPERIOD 50 // equals 100 because duty is 50%
+static uint8_t blnkCount=2;
 static unsigned long nextBlink=10;
 
 
@@ -117,9 +128,9 @@ void checkBlink()
 void loop()
 {
 	checkBlink();
-	if (touchEvent)
+	if (qTouch.AT42QTchangeEvent)
 	{
-		touchEvent=0;
+		qTouch.AT42QTchangeEvent=0;
 		uint8_t status; 
 		uint8_t keyset;
 		status=qTouch.getRegValue(AT42QT1070::DETECTIONSTATUS);

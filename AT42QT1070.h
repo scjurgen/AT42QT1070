@@ -99,8 +99,8 @@ public:
     */
 #if POLLING_USED
     uint16_t refSet[AT42QT1070_MAXKEYS]; //!< internal copy of ref set only used if using POLLING mode
-    void completeDiffSet(int8_t *delta); //!< get difference of keyvalues delta[i]=actual[i]-reference[i]
-    void changedDiffSet(int8_t *delta); //!< as completeDiffSet but suppose that reference did not change so it is not loaded
+    uint8_t saveReferenceSet(); //!< if calibration done the reference must be reread
+    uint8_t changedDiffSet(int8_t *delta);  //!< get difference of keyvalues delta[i]=actual[i]-reference[i]
 #endif
 
 };

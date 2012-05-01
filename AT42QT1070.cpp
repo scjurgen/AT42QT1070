@@ -98,14 +98,12 @@ void AT42QT1070::setRegValue(uint8_t regAdr, uint8_t val)
     checkResult(result);
 }
 
-void AT42QT1070::completeDiffSet(int8_t *delta)
+uint8_t AT42QT1070::changedDiffSet(int8_t *delta)
 {
 	uint16_t currentVal[AT42QT1070_MAXKEYS];
-	uint16_t refVal[AT42QT1070_MAXKEYS];
-
-	Wire.beginTransmission(AT42I2CAdr);
-	Wire.write(KEYSIGNAL);
-	checkResult(Wire.endTransmission());
+	
+	if (!setActiveAddress(KEYSIGNAL))
+		return 0;
 	Wire.requestFrom(AT42I2CAdr, (uint8_t)(AT42QT1070_MAXKEYS*2));
 	if(Wire.available()==AT42QT1070_MAXKEYS*2)
 	{
@@ -114,11 +112,24 @@ void AT42QT1070::completeDiffSet(int8_t *delta)
 			uint8_t msb = Wire.read();
 			uint8_t lsb = Wire.read();
 			currentVal[i]=((uint16_t)msb<<8)+lsb;
+			int16_t dt = currentVal[i]-refSet[i];
+			if (dt >=127) dt=127;
+			else
+				if (dt <=-127) dt=-127; // actually we could do -128.. but what the heck
+			delta[i]=dt;
 		}
-	}
-	Wire.beginTransmission(AT42I2CAdr);
-	Wire.write(REFERENCE);
-	checkResult(Wire.endTransmission());
+	}	
+	return 1;
+}
+
+
+uint8_t AT42QT1070::saveReferenceSet()
+{
+	uint16_t currentVal[AT42QT1070_MAXKEYS];
+	
+	if (!setActiveAddress(KEYSIGNAL))
+		return 0;
+
 	Wire.requestFrom(AT42I2CAdr, (uint8_t)(AT42QT1070_MAXKEYS*2));
 	if(Wire.available()==AT42QT1070_MAXKEYS*2)
 	{
@@ -126,20 +137,18 @@ void AT42QT1070::completeDiffSet(int8_t *delta)
 		{
 			uint8_t msb = Wire.read();
 			uint8_t lsb = Wire.read();
-			refVal[i]=((uint16_t)msb<<8)+lsb;
-			int16_t dt = currentVal[i]-refVal[i];
-			if (dt >=127) dt=127;
-			else
-				if (dt <=-127) dt=-127; // actually we could do -128.. but what the heck
-			delta[i]=dt;
+			refSet[i]=((uint16_t)msb<<8)+lsb;
 		}
-	}	
+	}
+
+	return 1;
 }
+
 
 void AT42QT1070::reset() // all values will be default
 {
     setRegValue(RESET,0x1);
-	delay(125+30); // 125 ms watchdog+30ms NACK
+	delay(200+125+30); 
 }
 void AT42QT1070::calibrate() // all values will be default
 {
